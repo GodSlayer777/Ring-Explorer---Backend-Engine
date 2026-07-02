@@ -30,13 +30,11 @@ class MisionActivaView(discord.ui.View):
         await interaction.response.defer()
         
         try:
-            # A. Datos del Jugador (Usando el Servicio Optimizado)
             jugador_bd = get_player_data(self.user_id)
             if not jugador_bd:
                 return await interaction.followup.send("Error: No se encontró tu perfil.", ephemeral=True)
             
             guardar_ultima_mision(self.user_id, self.nombre_mision)
-            # 👇 CORRECCIÓN: Agregamos una coma y un guion bajo para atrapar (e ignorar) el 4to valor
             jugador_real, tipo_arma, nivel_maestria, _ = ServicioJugador.obtener_stats_reales(jugador_bd)
             agilidad = jugador_real['agilidad']
             
@@ -51,7 +49,7 @@ class MisionActivaView(discord.ui.View):
             # --- 3. INICIAR LA VISTA DE BATALLA ---
             vista_batalla = BatallaView(
                 user_id=self.user_id,
-                jugador=jugador_real, # ¡Pasamos el jugador con stats reales!
+                jugador=jugador_real, 
                 nombre_mision=self.nombre_mision,
                 nombre_monstruo=nombre_mostrar, 
                 stats_monstruo=stats_base,      
@@ -150,29 +148,26 @@ class CuracionBatallaModal(discord.ui.Modal):
         self.add_item(self.cantidad)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # 👇 1. PAUSAMOS LA INTERACCIÓN INMEDIATAMENTE (Esto arregla el error) 👇
         await interaction.response.defer()
         
         try:
             qty = int(self.cantidad.value)
             if qty <= 0: raise ValueError
         except:
-            # 👇 2. Como ya hicimos defer, usamos followup.send 👇
             return await interaction.followup.send("Número inválido.", ephemeral=True)
             
-        # 👇 3. EL TRUCO: Si es la torre, engañamos al límite pasando -999 usos previos
         usados_para_limite = -999999 if self.es_torre else self.view_batalla.Hongos_usados
 
         usados_real, hp_recuperado, error = ServicioCombate.procesar_curacion(
             self.view_batalla.user_id,
             qty,
-            usados_para_limite, # Pasa el límite falso o el real
+            usados_para_limite, 
             self.view_batalla.hp_jugador,
             self.view_batalla.hp_max_jugador
         )
 
         if error:
-            # 👇 4. Usamos followup.send aquí también 👇
+            
             return await interaction.followup.send(error, ephemeral=True)
 
         self.view_batalla.Hongos_usados += usados_real
@@ -187,7 +182,6 @@ class CuracionBatallaModal(discord.ui.Modal):
             motivo = "falta de inventario" if self.es_torre else "límite de 10 o falta de inventario"
             msg_extra = f"\n(Solo usaste **{usados_real}** por {motivo})."
 
-        # 👇 4. Ajustamos el texto del combate para que diga "∞"
         texto_limite = "∞" if self.es_torre else f"{self.view_batalla.Hongos_usados}/10"
 
         await self.view_batalla.ejecutar_turno(
@@ -265,7 +259,6 @@ class BatallaView(discord.ui.View):
         self.jugador_perfora_armadura = False
         self.monstruo_perfora_armadura = False
         # 👇 1. VERIFICAMOS SI ESTAMOS EN LA TORRE
-        # --- ⚡ CORRECCIÓN: USAR VALORES YA CALCULADOS POR EL SERVICIO ---
         es_torre = "Torre de Babel" in self.nombre_mision
         mult_divino = self.jugador.get('torre_buff_hp', 1.0) if es_torre else 1.0
         
@@ -287,11 +280,9 @@ class BatallaView(discord.ui.View):
         self.jugador['hp'] = self.hp_jugador
         self.jugador['energia'] = self.energia
         
-        # 👇 Leemos la BD para el estado de batalla
         self.mp_jugador = self.jugador.get('mp', 50)
         self.mp_max_jugador = self.jugador.get('mp_max', 50)
 
-        # 👇 SOLUCIÓN: Usamos directamente el valor ya calculado de 'jugador_real' 👇
         self.agilidad = self.jugador.get('agilidad', 0) 
         self.cargas = 0
         self.fatiga_pendiente = False
@@ -372,15 +363,12 @@ class BatallaView(discord.ui.View):
             boton_esq.style = discord.ButtonStyle.secondary
             boton_esq.disabled = True
         else:
-            # 1. Tu fórmula elegida: vel_monstruo - agilidad (mínimo 5)
             vel_monstruo = self.stats.get('velocidad', 0)
             coste_simulado = max(5, int(vel_monstruo - self.agilidad))
             
-            # 2. Aplicamos la reducción pasiva de tu habilidad "Eficiente"
             coste_simulado = int(coste_simulado * (1.0 - getattr(self, 'reduccion_energia_total', 0.0)))
-            coste_simulado = max(1, coste_simulado) # Mínimo 1⚡
+            coste_simulado = max(1, coste_simulado) 
             
-            # 3. Actualizamos el botón visualmente
             if self.energia >= coste_simulado:
                 boton_esq.label = f"Esquivar (-{coste_simulado}⚡)"
                 boton_esq.style = discord.ButtonStyle.success
@@ -530,7 +518,6 @@ class BatallaView(discord.ui.View):
             if efectos_limpios.startswith("|"): efectos_limpios = efectos_limpios[1:].strip()
             texto_efectos = f"\n> ✨ **Efectos:** {efectos_limpios}" if efectos_limpios else ""
             
-            # msg_resultado ya contiene el (⚡ -Xe) correcto gracias al cambio en el Servicio
             msg_personalizado = f"{msg_resultado}\n> 🗡️ (+30% Prf) **Contraataque listo**{texto_efectos}"
         else:
             msg_personalizado = f"{msg_resultado}\n> ⚠️ **¡Quedas indefenso ante su ataque!**"
@@ -548,17 +535,13 @@ class BatallaView(discord.ui.View):
         if interaction.user.id != self.user_id: return
         await interaction.response.defer()
         
-        # 👇 NUEVO: CURAR MASCOTA AL HUIR
         if self.mascota:
             from Data.database import update_mascota_hp
             update_mascota_hp(self.mascota['id'], self.mascota.get('hp_max', 100))
             
         from Vistas.vistas import AldeaView, embed_aldea
-        # Al huir, limpiamos attachments por si acaso
         await interaction.edit_original_response(content="🏃💨 Escapaste...", embed=embed_aldea(), view=AldeaView(self.user_id), attachments=[])
 
-    # Dentro de la clase BatallaView en vistasBatalla.py
-    # Busca la línea 530 en tu archivo vistasBatalla.py
     @discord.ui.button(label="✨ Habilidades", style=discord.ButtonStyle.primary, row=2)
     async def mostrar_menu_habilidades(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id: 
@@ -681,7 +664,6 @@ class BatallaView(discord.ui.View):
             if getattr(self, 'monstruo_perfora_armadura', False):
                 self.jugador['defensa'] = int(def_jugador_orig * 0.70) 
                 
-            # 👇 LÓGICA DE HABILIDAD CARGADA 👇
             if getattr(self, 'habilidad_cargando', False):
                 # Si el jugador esquivó con éxito, el monstruo falla la habilidad masiva
                 if getattr(self, 'esquive_exitoso', False):
@@ -690,7 +672,6 @@ class BatallaView(discord.ui.View):
                     log_arma_defensa = f"\n> 💨 **¡ESQUIVASTE {nombre_hab.upper()}!** El {self.nombre_monstruo} gastó toda su energía y falló."
                     daño_final_m = 0
                 else:
-                    # 💥 ¡DESATA LA HABILIDAD!
                     daño_final_m, log_arma_defensa_extra = ServicioCombate.calcular_ataque_monstruo(self.stats, self.jugador['defensa'], self.mecanica, self)
                     mult_hab = self.stats.get('daño_Habilidad', 2)
                     daño_final_m = int(daño_final_m * mult_hab)
@@ -729,7 +710,6 @@ class BatallaView(discord.ui.View):
 
             self.jugador['defensa'] = def_jugador_orig 
             
-            # 👇 GUARDAMOS EL RESULTADO DEL ESQUIVE ANTES DE LIMPIAR LAS BANDERAS 👇
             esquive_ahora = getattr(self, 'esquive_exitoso', False)
             
             # Limpiamos las banderas de esquive para el siguiente turno (Importante)
@@ -848,7 +828,6 @@ class BatallaView(discord.ui.View):
         from Logica.servicio_habilidades import ServicioHabilidades
         msg_pasivas = ServicioHabilidades.procesar_pasivas_fin_de_turno(self.user_id, self)
         if msg_pasivas:
-            # 👇 MÁS MAGIA DE LIMPIEZA VISUAL
             pasivas_limpias = msg_pasivas.replace("\n> ", " | ").replace("\n", " | ").strip()
             if pasivas_limpias.startswith("|"): 
                 pasivas_limpias = pasivas_limpias[1:].strip()
@@ -907,7 +886,6 @@ class BatallaView(discord.ui.View):
             lista_visual.append(f"{obtener_emoji(nombre)} **{nombre}** x{cant}")
         texto_recompensas = "\n".join(lista_visual) if lista_visual else "Nada..."
 
-        # 👇 1. PROCESAR USOS DE HABILIDADES EN LOTE 👇
         from Data.database import procesar_usos_habilidades_fin_batalla
         
         from Data.habilidades_db import HABILIDADES_HUMANO
@@ -918,7 +896,6 @@ class BatallaView(discord.ui.View):
             if hab and hab.get('categoria') == 'Pasiva' and hab.get('activacion') == 'automatica':
                 
                 # Revisamos si es una pasiva que modifica los stats base 
-                # (Las mismas llaves que tienes en aplicar_pasivas)
                 llaves_estado = [
                     'aumento_pasivo_ataque', 'aumento_pasivo_defensa', 'aumento_pasivo_agilidad', 
                     'aumento_pasivo_vida', 'aumento_pasivo_miasma', 'aumento_pasivo_energia'
@@ -939,11 +916,9 @@ class BatallaView(discord.ui.View):
             for mensaje_subida in subidas_habilidades:
                 texto_habilidades += f"> {mensaje_subida}\n"
 
-        # 3. CONSTRUIR EMBED A TRAVÉS DE EMBEDS.PY
         embed_vic = embed_victoria_batalla(self.nombre_monstruo, resultado, puntos_gracia, texto_recompensas, texto_xp_mascota, texto_habilidades)
 
 
-        # Cinemática Ascensión (Opcional)
         if resultado['es_ascension']:
             url_gif_ascension = "https://i.imgur.com/zVR1V2x.png" 
             embed_ascension = discord.Embed(
@@ -955,11 +930,8 @@ class BatallaView(discord.ui.View):
             await interaction.edit_original_response(content=None, embed=embed_ascension, view=None)
             await asyncio.sleep(8)
 
-        # Creamos una vista temporal solo para volver
-        # Creamos una vista temporal solo para volver
         vista_final = discord.ui.View()
         
-        # 👇 NUEVA LÓGICA: EVENTO DE NIDO INTELIGENTE 👇
         stats_monstruo_real = INFO_MONSTRUOS.get(nombre_para_botin, {})
         
         # El nido solo aparece si NO es la torre, si el monstruo SI es una criatura viva (tiene 'especie') y cae el 20%
@@ -981,12 +953,10 @@ class BatallaView(discord.ui.View):
                     ),
                     color=0xe67e22
                 )
-                # Llamamos a la nueva vista que creaste abajo
                 await int_btn.response.edit_message(embed=embed_nido, view=NidoEncontradoView(self.user_id, nombre_para_botin), attachments=[])
             
             boton_nido.callback = nido_cb
             vista_final.add_item(boton_nido)
-        # 👆 FIN DE LÓGICA DE NIDO 👆
 
         boton_volver = discord.ui.Button(label="↩️ Volver a la Aldea", style=discord.ButtonStyle.success)
         
@@ -1018,7 +988,6 @@ class BatallaView(discord.ui.View):
                 dif_superada = getattr(self, 'dificultad', 'Visitante')
                 marcar_dificultad_completada(self.user_id, dif_superada)
                 
-                # Opcional: Mostramos en el título la dificultad superada
                 embed_vic = discord.Embed(
                     title=f"👑 ¡SEÑOR DE BABEL [{dif_superada}]!",
                     description="*El inmenso cuerpo del Dios de la Torre se desploma, haciendo temblar los cimientos del mundo. Una luz dorada desciende sobre ti...*\n\n**¡HAS CONQUISTADO LA CIMA DE LA TORRE!**\nLos dioses, atónitos ante tu fuerza, reconocen tu inmenso poder y te otorgan sus tesoros más sagrados.",
@@ -1031,7 +1000,6 @@ class BatallaView(discord.ui.View):
                 # Reseteamos el piso a 1
                 update_piso_torre(self.user_id, 1)
 
-                # SOLO BOTÓN DE REGRESAR
                 
                 async def victoria_cb(int_btn):
                     if int_btn.user.id != self.user_id: return
@@ -1039,8 +1007,7 @@ class BatallaView(discord.ui.View):
                     from Vistas.Embeds import embed_aldea
                     await int_btn.response.edit_message(content=None, embed=embed_aldea(), view=AldeaView(self.user_id), attachments=[])
                 await interaction.edit_original_response(content="¡Torre Superada!", embed=embed_vic, view=vista_final, attachments=[])
-                return # Salimos aquí para que no genere el botón de avanzar
-            # 👆 FIN LÓGICA PISO 50 👆
+                return 
 
 
             # 2. SI NO ES EL PISO 50, AVANZAMOS NORMAL
@@ -1140,11 +1107,11 @@ class BatallaView(discord.ui.View):
                 from Vistas.vistasBatalla import BatallaView
                 nueva_vista = BatallaView(
                     user_id=self.user_id,
-                    jugador=jugador_real, # 👈 INYECTAMOS AL JUGADOR REAL AQUÍ
+                    jugador=jugador_real, 
                     nombre_mision=f"Torre de Babel - Piso {nuevo_piso}",
                     nombre_monstruo=nombre_mostrar,
                     stats_monstruo=stats_base,
-                    agilidad=jugador_real['agilidad'], # 👈 AGILIDAD REAL CALCULADA
+                    agilidad=jugador_real['agilidad'],
                     nivel_maestria=nivel_maestria,
                     tipo_arma_cache=tipo_arma,
                     dificultad=dif_actual,
@@ -1164,7 +1131,6 @@ class BatallaView(discord.ui.View):
             boton_avanzar.callback = avanzar_cb
             vista_final.add_item(boton_avanzar)
 
-            # 👇 1. CREAMOS EL "HELPER" ANTI-FANTASMAS (Se pone justo antes de los envíos)
         async def actualizar_pantalla_victoria(content=None, embed=None, view=None, attachments=[]):
             if getattr(self, 'viene_de_habilidad', False) and hasattr(self, 'mensaje_batalla'):
                 await self.mensaje_batalla.edit(content=content, embed=embed, view=view, attachments=attachments)
@@ -1173,7 +1139,6 @@ class BatallaView(discord.ui.View):
 
         # ====================================================
 
-        # 🗼 (Si estabas dentro del bloque de la Torre de Babel, cambias el original por el helper)
         if "Torre de Babel" in self.nombre_mision:
             await actualizar_pantalla_victoria(content="¡Piso Superado!", embed=embed_vic, view=vista_final, attachments=[])
             
@@ -1214,7 +1179,7 @@ class BatallaView(discord.ui.View):
             await interaction.edit_original_response(content=None, embed=embed_derrota_batalla(), view=vista_final, attachments=[])
 
 # ==========================================
-# 🔮 MENU DE HABILIDADES INLINE (REEMPLAZA AL EFÍMERO)
+# 🔮 MENU DE HABILIDADES INLINE 
 # ==========================================
 class VistaSeleccionHabilidad(discord.ui.View):
     def __init__(self, vista_batalla):
@@ -1264,7 +1229,6 @@ class VistaSeleccionHabilidad(discord.ui.View):
                 view_batalla=self.vista_batalla
             )
 
-            # Si falla (ej: No tiene maná), mandamos la advertencia efímera para no ensuciar la pelea
             if not exito:
                 return await interaction.response.send_message(msg, ephemeral=True)
 
@@ -1319,7 +1283,6 @@ class TorreBendicionView(discord.ui.View):
                 
                 from Data.database import get_player_data, get_mascota_equipada
                 
-                # 👇 1. OBTENEMOS LAS ESTADÍSTICAS REALES DESDE EL PRINCIPIO 👇
                 jugador_bd = get_player_data(self.user_id)
                 jugador_real, tipo_arma, nivel_maestria = ServicioJugador.obtener_stats_reales(jugador_bd)
                 
@@ -1369,11 +1332,11 @@ class TorreBendicionView(discord.ui.View):
                 from Vistas.vistasBatalla import BatallaView
                 nueva_vista = BatallaView(
                     user_id=self.user_id,
-                    jugador=jugador_real, # 👈 INYECTAMOS AL JUGADOR REAL AQUÍ
+                    jugador=jugador_real, 
                     nombre_mision=f"Torre de Babel - Piso {nuevo_piso}",
                     nombre_monstruo=nombre_mostrar,
                     stats_monstruo=stats_base,
-                    agilidad=jugador_real['agilidad'], # 👈 AGILIDAD REAL CALCULADA
+                    agilidad=jugador_real['agilidad'], 
                     nivel_maestria=nivel_maestria,
                     tipo_arma_cache=tipo_arma,
                     dificultad=dif_actual,
@@ -1397,7 +1360,7 @@ class TorreBendicionView(discord.ui.View):
         async def huir_cb(int_btn):
             if int_btn.user.id != self.user_id: return
             
-            # 👇 NUEVO: CURAMOS A LA MASCOTA AL ESCAPAR DE LA TORRE
+            
             from Data.database import get_mascota_equipada, update_mascota_hp
             mascota_db = get_mascota_equipada(self.user_id)
             if mascota_db:
