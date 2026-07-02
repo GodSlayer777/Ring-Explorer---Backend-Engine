@@ -12,13 +12,12 @@ from Data.database import (
     remove_material
 )
 from Data.data import MISIONES_DB, DROPS_MISIONES, DROPS_MONSTRUOS, ARMAS_DB,ARMADURAS_DB
-# 👇 IMPORTANTE: Importamos el servicio de cálculo de mejoras
 from Logica.servicio_mejoras import ServicioMejoras
 
 class ServicioCombate:
     
     # =========================================================
-    # ⚔️ MÉTODO CORREGIDO: ATAQUE DEL JUGADOR (CON MEJORAS Y DEFENSA)
+    # ATAQUE DEL JUGADOR (CON MEJORAS Y DEFENSA)
     # =========================================================
     @staticmethod
     def calcular_ataque_jugador(jugador, monstruo, mecanica_arma, view_context):
@@ -26,7 +25,7 @@ class ServicioCombate:
         Calcula el ataque considerando el Nivel de Mejora (+1, +2...) del arma
         y restando la defensa del monstruo objetivo.
         """
-        # 1. Obtener nombre del arma equipada (Ej: "Katana +2")
+        # 1. Obtener nombre del arma equipada 
         nombre_arma_equip = jugador['arma_equipada'] 
         
         # 2. Separar nombre base y nivel
@@ -47,17 +46,16 @@ class ServicioCombate:
             daño_arma_mejorado=jugador['ataque'] 
         )
         
-        # 👇 6. ¡AQUÍ ESTÁ LA MAGIA QUE FALTABA! 👇
         # Obtenemos la defensa actual del monstruo (usando .get por seguridad)
         defensa_monstruo = monstruo.get('def', 0)
         
-        # Restamos la defensa al daño bruto. Usamos max(1, ...) para que nunca cure al monstruo haciendo daño negativo.
+        # Restamos la defensa al daño bruto. 
         daño_final = max(1, daño_bruto - defensa_monstruo)
         
         return daño_final, mensaje
 
     # =========================================================
-    # 🛡️ ATAQUE DEL MONSTRUO
+    #  ATAQUE DEL MONSTRUO
     # =========================================================
     @staticmethod
     def calcular_ataque_monstruo(stats_monstruo, defensa_jugador, mecanica_arma, view_context=None):
@@ -65,7 +63,6 @@ class ServicioCombate:
         Calcula el daño: (Atk Monstruo - Def Jugador) +/- RNG -> Mitigación Arma.
         Considera buffs temporales como Piel Absorbente.
         """
-        # 👇 1. APLICAR BUFF DE PIEL ABSORBENTE 👇
         defensa_final_jugador = defensa_jugador
         
         if view_context and getattr(view_context, 'buff_piel_activa', 0.0) > 0:
@@ -74,20 +71,18 @@ class ServicioCombate:
             defensa_final_jugador += int(defensa_jugador * bono_piel)
             # Consumimos el buff
             view_context.buff_piel_activa = 0.0
-            # 👆 ------------------------------------------------ 👆
 
         # 2. Daño Base con RNG (Variación del 10%)
-        # Usamos la defensa_final_jugador (que puede estar buffeada)
         daño_neto = max(1, stats_monstruo['atk'] - defensa_final_jugador)
         daño_base = int(daño_neto * random.uniform(0.9, 1.1))
         
-        # 3. Aplicar Mitigación del Arma (Ej: Escudo reduce daño, Espadón pierde cargas)
+        # 3. Aplicar Mitigación del Arma 
         daño_final, msg_arma = mecanica_arma.recibir_golpe(daño_base)
         
         return daño_final, f"{msg_arma}"
 
     # =========================================================
-    # 🏃 NUEVO MÉTODO: CALCULAR AGILIDAD TOTAL (CON MEJORAS)
+    #  NUEVO MÉTODO: CALCULAR AGILIDAD TOTAL (CON MEJORAS)
     # =========================================================
     @staticmethod
     def calcular_agilidad_total(jugador):
@@ -98,7 +93,7 @@ class ServicioCombate:
         agilidad_base = jugador.get('agilidad', 0)
         
         # 2. Obtener Armadura Equipada
-        nombre_armor_full = jugador['armadura_equipada'] # Ej: "Traje Ninja +3"
+        nombre_armor_full = jugador['armadura_equipada']
         nombre_base, _ = ServicioMejoras.obtener_info_item(nombre_armor_full)
         
         # 3. Buscar la armadura en la DB
@@ -107,10 +102,10 @@ class ServicioCombate:
         agilidad_armor_final = 0
         
         if stats_armor:
-            # Obtenemos la agilidad base de la armadura (si tiene, sino 0)
+            # Obtenemos la agilidad base de la armadura 
             agi_armor_base = stats_armor.get('agilidad', 0)
             
-            # 🔥 APLICAMOS LA MEJORA (+30% por nivel igual que defensa/ataque) 🔥
+          
             if agi_armor_base > 0:
                 agilidad_armor_final = ServicioMejoras.calcular_stats(nombre_armor_full, agi_armor_base)
         
@@ -268,21 +263,21 @@ class ServicioCombate:
         # Calculamos la XP base según el rango de la misión
         # (Podemos usar tu índice_rango: 50 XP base * 1.5 por rango)
         jugador_previo = dict(get_player_data(user_id))
-        rango_idx = 0 # Aquí deberías pasar el índice de rango de la misión
+        rango_idx = 0 
         xp_a_dar = int(50 * (1.3 ** rango_idx)) 
         
-        # Llamamos a nuestra función de base de datos
+        
         resultado_xp, subio_nivel = dar_xp_jugador(user_id, xp_a_dar)
 
         # ==========================================
-        # 7. GUARDAR TODO EN BASE DE DATOS (¡SOLO UNA VEZ!)
+        # 7. GUARDAR TODO EN BASE DE DATOS 
         # ==========================================
         if recompensa_zenny > 0: add_zenny(user_id, recompensa_zenny)
         for item, cant in items_obtenidos.items():
             if cant > 0: add_material(user_id, item, cant)
 
         # ==========================================
-        # 8. SISTEMAS DE PROGRESO (SEPARADOS)
+        # 8. SISTEMAS DE PROGRESO 
         # ==========================================
         progreso_cazador_log = []
         progreso_maestro_log = []
@@ -319,8 +314,8 @@ class ServicioCombate:
             "zenny": recompensa_zenny, 
             "items": items_obtenidos, 
             "puntos_rep": puntos_rep_ganados,
-            "progreso_cazador_txt": "\n".join(progreso_cazador_log), # 👈 ¡La llave correcta!
-            "progreso_maestro_txt": "\n".join(progreso_maestro_log), # 👈 ¡La llave correcta!
+            "progreso_cazador_txt": "\n".join(progreso_cazador_log), 
+            "progreso_maestro_txt": "\n".join(progreso_maestro_log), 
             "subio_nivel": subio_nivel,
             "nivel_actual": resultado_xp.get('nivel') if subio_nivel else jugador_previo['nivel'],
             "es_ascension": es_ascension
